@@ -1,6 +1,6 @@
-const User = require('../models/User');
+const User = require('../models/User').default;
 const jwt = require('jsonwebtoken');
-const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
 
 // Generate JWT Token
 const generateToken = (userId) => {
@@ -21,7 +21,6 @@ exports.register = async (req, res) => {
       });
     }
 
-    // Check password match
     if (password !== confirmPassword) {
       return res.status(400).json({
         success: false,
@@ -29,7 +28,6 @@ exports.register = async (req, res) => {
       });
     }
 
-    // Check password length
     if (password.length < 8) {
       return res.status(400).json({
         success: false,
@@ -46,51 +44,35 @@ exports.register = async (req, res) => {
       });
     }
 
-    // Generate verification token
-    const verificationToken = crypto.randomBytes(32).toString('hex');
-    const verificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    // Hash password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
 
     // Create user
     const user = await User.create({
       email: email.toLowerCase(),
       firstName,
       lastName,
-      password,
-      verificationToken,
-      verificationTokenExpires,
+      password: hashedPassword,
     });
 
     // Generate token
     const token = generateToken(user._id);
 
-    // TODO: Send verification email
-    // await sendVerificationEmail(user.email, verificationToken);
-
     res.status(201).json({
       success: true,
-      message: 'Registration successful! Please check your email to verify your account.',
+      message: 'Registration successful!',
       token,
       user: {
         id: user._id,
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
-        isVerified: user.isVerified,
       },
     });
   } catch (error) {
     console.error('Registration error:', error);
 
-    // Handle validation errors
-    if (error.name === 'ValidationError') {
-      const messages = Object.values(error.errors).map((err) => err.message);
-      return res.status(400).json({
-        success: false,
-        message: messages.join('. '),
-      });
-    }
-
-    // Handle duplicate key errors
     if (error.code === 11000) {
       return res.status(409).json({
         success: false,
@@ -105,12 +87,10 @@ exports.register = async (req, res) => {
   }
 };
 
-
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // Validation
     if (!email || !password) {
       return res.status(400).json({
         success: false,
@@ -125,14 +105,6 @@ exports.login = async (req, res) => {
       return res.status(401).json({
         success: false,
         message: 'Invalid email or password',
-      });
-    }
-
-    // Check if account is active
-    if (!user.isActive) {
-      return res.status(403).json({
-        success: false,
-        message: 'Account has been deactivated',
       });
     }
 
@@ -163,7 +135,6 @@ exports.login = async (req, res) => {
         firstName: user.firstName,
         lastName: user.lastName,
         avatar: user.avatar,
-        isVerified: user.isVerified,
       },
     });
   } catch (error) {
@@ -191,65 +162,3 @@ exports.getMe = async (req, res) => {
     });
   }
 };
-
-
-// ============================================
-// 9. Frontend API Integration (Register.jsx)
-// ============================================
-/*
-// Update your formik onSubmit:
-
-const formik = useFormik({
-  initialValues: {
-    email: "",
-    firstName: "",
-    lastName: "",
-    password: "",
-    confirmPassword: "",
-  },
-  validationSchema: Yup.object({
-    email: Yup.string().email("Invalid email").required("Required"),
-    firstName: Yup.string().required("Required"),
-    lastName: Yup.string().required("Required"),
-    password: Yup.string()
-      .min(8, "Must be at least 8 characters")
-      .required("Required"),
-    confirmPassword: Yup.string()
-      .oneOf([Yup.ref("password"), null], "Passwords must match")
-      .required("Required"),
-  }),
-  onSubmit: async (values, { setSubmitting, setErrors, resetForm }) => {
-    try {
-      const response = await fetch('http://localhost:5000/api/auth/register', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(values),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        // Store token in localStorage
-        localStorage.setItem('token', data.token);
-        
-        alert('Registration successful! Please check your email.');
-        resetForm();
-        
-        // Redirect to dashboard or login
-        window.location.href = '/dashboard';
-      } else {
-        setErrors({ submit: data.message });
-        alert(data.message);
-      }
-    } catch (error) {
-      console.error('Registration error:', error);
-      setErrors({ submit: 'Network error. Please try again.' });
-      alert('An error occurred. Please try again.');
-    } finally {
-      setSubmitting(false);
-    }
-  },
-});
-*/
