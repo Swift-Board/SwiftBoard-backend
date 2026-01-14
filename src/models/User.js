@@ -1,28 +1,27 @@
-import mongoose from 'mongoose';
-import bcrypt from 'bcryptjs';
+import mongoose from "mongoose";
+import bcrypt from "bcryptjs";
+
+// Add these fields to your User model schema
 
 const userSchema = new mongoose.Schema(
   {
     email: {
       type: String,
-      required: [true, 'Email is required'],
+      required: true,
       unique: true,
       lowercase: true,
-      trim: true,
     },
     firstName: {
       type: String,
-      required: [true, 'First name is required'],
-      trim: true,
+      required: true,
     },
     lastName: {
       type: String,
-      required: [true, 'Last name is required'],
-      trim: true,
+      required: true,
     },
     password: {
       type: String,
-      required: [true, 'Password is required'],
+      required: true,
       select: false,
     },
     avatar: {
@@ -32,6 +31,14 @@ const userSchema = new mongoose.Schema(
     lastLogin: {
       type: Date,
       default: null,
+    },
+    resetPasswordToken: {
+      type: String,
+      select: false,
+    },
+    resetPasswordExpire: {
+      type: Date,
+      select: false,
     },
   },
   {
@@ -44,6 +51,6 @@ userSchema.methods.comparePassword = async function (candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
-const User = mongoose.models.User || mongoose.model('User', userSchema);
+const User = mongoose.models.User || mongoose.model("User", userSchema);
 
 export default User;
