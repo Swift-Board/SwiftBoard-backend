@@ -296,7 +296,7 @@ const emailTemplates = {
               <p>Best regards,<br>The Team</p>
             </div>
             <div class="footer">
-              <p>© ${new Date().getFullYear()} Your Company. All rights reserved.</p>
+              <p>© ${new Date().getFullYear()} SwiftBoard. All rights reserved.</p>
               <p>This confirmation was sent to you for security purposes.</p>
             </div>
           </div>
