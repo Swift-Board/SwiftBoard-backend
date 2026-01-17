@@ -3,6 +3,7 @@ const cors = require("cors");
 const mongoose = require("mongoose");
 require("dotenv").config();
 const authRoutes = require("./routes/authRoutes");
+const rideRoutes = require("./routes/rideRoutes");
 
 // Initialize Express app
 const app = express();
@@ -34,6 +35,7 @@ app.get("/", (req, res) => {
 
 // Import routes (add your routes here)
 app.use("/api/auth", authRoutes);
+app.use("/api/rides", rideRoutes);
 
 // 404 handler - must be after all routes
 app.use((req, res) => {
