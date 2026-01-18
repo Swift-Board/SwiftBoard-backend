@@ -11,8 +11,9 @@ const rideSchema = new mongoose.Schema(
       required: true,
     },
     price: { type: Number, required: true },
-    availableSeats: { type: Number, required: true },
+    occupiedSeats: { type: [Number], default: [] },
     totalSeats: { type: Number, required: true },
+    park: { type: String, default: "Express Terminal" },
     driver: {
       name: String,
       rating: Number,
@@ -25,10 +26,18 @@ const rideSchema = new mongoose.Schema(
       default: "available",
     },
   },
-  { timestamps: true },
+  {
+    timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
+  },
 );
 
-// Index for faster searching by route and date
+// Calculate available seats automatically
+rideSchema.virtual("availableSeats").get(function () {
+  return this.totalSeats - this.occupiedSeats.length;
+});
+
 rideSchema.index({ origin: 1, destination: 1, departureTime: 1 });
 
 module.exports = mongoose.model("Ride", rideSchema);

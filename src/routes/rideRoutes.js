@@ -6,6 +6,7 @@ const {
   getRideById,
   updateRide,
   deleteRide,
+  bookSeats,
 } = require("../controllers/rideController");
 
 // Search Endpoint
@@ -15,5 +16,7 @@ router.get("/search", searchRides);
 router.post("/", createRide);
 
 router.route("/:id").get(getRideById).patch(updateRide).delete(deleteRide);
+
+router.patch("/:id/book", bookSeats);
 
 module.exports = router;
