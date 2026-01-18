@@ -92,7 +92,6 @@ exports.bookSeats = async (req, res) => {
       ride,
     });
   } catch (error) {
-    console.error("🔥 Server Error:", error);
     res.status(500).json({
       success: false,
       message: error.message,
