@@ -33,7 +33,6 @@ const rideSchema = new mongoose.Schema(
   },
 );
 
-// Calculate available seats automatically
 rideSchema.virtual("availableSeats").get(function () {
   return this.totalSeats - this.occupiedSeats.length;
 });
