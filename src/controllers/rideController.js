@@ -1,4 +1,5 @@
 const Ride = require("../models/Ride");
+const Booking = require("../models/Booking");
 
 // 1. SEARCH RIDES
 exports.searchRides = async (req, res) => {
@@ -26,76 +27,90 @@ exports.searchRides = async (req, res) => {
 };
 
 exports.bookSeats = async (req, res) => {
-  console.log("📩 Incoming Booking Request:", {
-    rideId: req.params.id,
-    body: req.body,
-  });
+  const session = await mongoose.startSession();
+  session.startTransaction();
 
   try {
     const { seatNumbers, paymentReference } = req.body;
+    const rideId = req.params.id;
+    const userId = req.user.id; // Ensure your auth middleware provides this
 
-    // Validation
-    if (!seatNumbers || seatNumbers.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "No seats selected",
-      });
-    }
-
-    if (!paymentReference) {
-      return res.status(400).json({
-        success: false,
-        message: "Payment reference required",
-      });
-    }
-
+    // 1. Update the Ride (Atomic check to prevent double-booking)
     const ride = await Ride.findOneAndUpdate(
       {
-        _id: req.params.id,
+        _id: rideId,
         status: { $ne: "cancelled" },
         occupiedSeats: { $nin: seatNumbers },
       },
-      {
-        $addToSet: { occupiedSeats: { $each: seatNumbers } },
-      },
-      {
-        new: true,
-        runValidators: true,
-      },
+      { $addToSet: { occupiedSeats: { $each: seatNumbers } } },
+      { new: true, session },
     );
 
-    if (!ride) {
-      return res.status(400).json({
-        success: false,
-        message: "Seats unavailable or already booked",
-      });
-    }
+    if (!ride) throw new Error("Seats unavailable or already booked");
 
-    if (
-      ride.occupiedSeats.length >= ride.totalSeats &&
-      ride.status !== "full"
-    ) {
+    // 2. Create the Booking Record (This is what shows up in Travel Details)
+    const booking = await Booking.create(
+      [
+        {
+          user: userId,
+          ride: rideId,
+          seatNumbers,
+          paymentReference,
+          amountPaid: ride.price * seatNumbers.length,
+          status: "pending",
+        },
+      ],
+      { session },
+    );
+
+    // 3. Update Ride status to 'full' if needed
+    if (ride.occupiedSeats.length >= ride.totalSeats) {
       ride.status = "full";
-      await ride.save();
+      await ride.save({ session });
     }
 
+    await session.commitTransaction();
+
+    // 4. Socket.io Real-time update
     const io = req.app.get("socketio");
-    if (io) {
-      io.to(ride._id.toString()).emit("seatsUpdated", ride.occupiedSeats);
-    } else {
-      console.warn("⚠️ Socket.io not available for broadcast");
-    }
+    if (io) io.to(rideId.toString()).emit("seatsUpdated", ride.occupiedSeats);
 
     res.status(200).json({
       success: true,
-      message: "Seats booked successfully",
+      message: "Booking confirmed",
       ride,
+      booking: booking[0],
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    await session.abortTransaction();
+    res.status(400).json({ success: false, message: error.message });
+  } finally {
+    session.endSession();
+  }
+};
+
+exports.getMyBookings = async (req, res) => {
+  try {
+    const { status, startDate, endDate } = req.query;
+    let query = { user: req.user.id };
+
+    // Filter by status if provided (pending, completed, etc)
+    if (status && status !== "all") {
+      query.status = status;
+    }
+
+    // Filter by date range if provided
+    if (startDate && endDate) {
+      query.createdAt = { $gte: new Date(startDate), $lte: new Date(endDate) };
+    }
+
+    const bookings = await Booking.find(query)
+      .populate("ride") // This pulls in Origin, Destination, and Departure Time
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({ success: true, bookings });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 

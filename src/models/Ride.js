@@ -1,42 +1,26 @@
 const mongoose = require("mongoose");
 
-const rideSchema = new mongoose.Schema(
+const bookingSchema = new mongoose.Schema(
   {
-    origin: { type: String, required: true, index: true },
-    destination: { type: String, required: true, index: true },
-    departureTime: { type: Date, required: true },
-    vehicleType: {
+    user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+    ride: { type: mongoose.Schema.Types.ObjectId, ref: "Ride", required: true },
+    seatNumbers: [Number],
+    paymentReference: { type: String, required: true, unique: true },
+    bookingRef: {
       type: String,
-      enum: ["car", "bus", "sienna"],
-      required: true,
+      unique: true,
+      default: () =>
+        `BK-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
     },
-    price: { type: Number, required: true },
-    occupiedSeats: { type: [Number], default: [] },
-    totalSeats: { type: Number, required: true },
-    park: { type: String, default: "Express Terminal" },
-    driver: {
-      name: String,
-      rating: Number,
-      avatar: String,
-      phone: String,
-    },
+    amountPaid: Number,
+    company: { type: String, default: "Express Terminal" }, // For filtering
     status: {
       type: String,
-      enum: ["available", "full", "completed", "cancelled"],
-      default: "available",
+      enum: ["pending", "ongoing", "completed", "cancelled"],
+      default: "pending",
     },
   },
-  {
-    timestamps: true,
-    toJSON: { virtuals: true },
-    toObject: { virtuals: true },
-  },
+  { timestamps: true },
 );
 
-rideSchema.virtual("availableSeats").get(function () {
-  return this.totalSeats - this.occupiedSeats.length;
-});
-
-rideSchema.index({ origin: 1, destination: 1, departureTime: 1 });
-
-module.exports = mongoose.model("Ride", rideSchema);
+module.exports = mongoose.model("Booking", bookingSchema);
