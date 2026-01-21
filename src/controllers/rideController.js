@@ -48,7 +48,6 @@ exports.bookSeats = async (req, res) => {
 
     if (!ride) throw new Error("Seats unavailable or already booked");
 
-    // 2. Create the Booking Record (This is what shows up in Travel Details)
     const booking = await Booking.create(
       [
         {
@@ -63,7 +62,6 @@ exports.bookSeats = async (req, res) => {
       { session },
     );
 
-    // 3. Update Ride status to 'full' if needed
     if (ride.occupiedSeats.length >= ride.totalSeats) {
       ride.status = "full";
       await ride.save({ session });
@@ -71,7 +69,6 @@ exports.bookSeats = async (req, res) => {
 
     await session.commitTransaction();
 
-    // 4. Socket.io Real-time update
     const io = req.app.get("socketio");
     if (io) io.to(rideId.toString()).emit("seatsUpdated", ride.occupiedSeats);
 
@@ -94,18 +91,16 @@ exports.getMyBookings = async (req, res) => {
     const { status, startDate, endDate } = req.query;
     let query = { user: req.user.id };
 
-    // Filter by status if provided (pending, completed, etc)
     if (status && status !== "all") {
       query.status = status;
     }
 
-    // Filter by date range if provided
     if (startDate && endDate) {
       query.createdAt = { $gte: new Date(startDate), $lte: new Date(endDate) };
     }
 
     const bookings = await Booking.find(query)
-      .populate("ride") // This pulls in Origin, Destination, and Departure Time
+      .populate("ride")
       .sort({ createdAt: -1 });
 
     res.status(200).json({ success: true, bookings });
