@@ -1,26 +1,32 @@
 const mongoose = require("mongoose");
 
-const bookingSchema = new mongoose.Schema(
+const rideSchema = new mongoose.Schema(
   {
-    user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-    ride: { type: mongoose.Schema.Types.ObjectId, ref: "Ride", required: true },
-    seatNumbers: [Number],
-    paymentReference: { type: String, required: true, unique: true },
-    bookingRef: {
+    origin: { type: String, required: true },
+    destination: { type: String, required: true },
+    departureTime: { type: Date, required: true },
+    vehicleType: {
       type: String,
-      unique: true,
-      default: () =>
-        `BK-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
+      enum: ["bus", "sienna", "car"],
+      required: true,
     },
-    amountPaid: Number,
-    company: { type: String, default: "Express Terminal" }, // For filtering
+    price: { type: Number, required: true },
+    totalSeats: { type: Number, required: true },
+    occupiedSeats: { type: [Number], default: [] },
+    park: { type: String, required: true },
+    image: { type: String },
+    driver: {
+      name: { type: String },
+      rating: { type: Number, default: 5.0 },
+    },
     status: {
       type: String,
-      enum: ["pending", "ongoing", "completed", "cancelled"],
-      default: "pending",
+      enum: ["available", "full", "cancelled", "completed"],
+      default: "available",
     },
   },
   { timestamps: true },
 );
 
-module.exports = mongoose.model("Booking", bookingSchema);
+// This is correct now
+module.exports = mongoose.models.Ride || mongoose.model("Ride", rideSchema);

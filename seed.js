@@ -1,13 +1,25 @@
 const mongoose = require("mongoose");
 const Ride = require("./src/models/Ride");
+const Booking = require("./src/models/Booking");
 require("dotenv").config();
 
 async function seed() {
   try {
     await mongoose.connect(process.env.dbURI);
-    await Ride.deleteMany({});
+    console.log("Connected to MongoDB...");
+    try {
+        await mongoose.connection.collection('rides').dropIndex('paymentReference_1');
+        console.log("Cleaned up old incorrect index.");
+    } catch (e) {
+        console.log("No old index to drop, moving on...");
+    }
 
-    const cities = ["Lagos", "Abuja", "Jos", "Warri", "Enugu", "Calabar"];
+    // 2. Clear existing rides
+    await Ride.deleteMany({});
+    console.log("Cleared old rides.");
+
+    const origins = ["Port Harcourt", "Lagos", "Abuja"];
+    const destinations = ["Lagos", "Abuja", "Jos", "Warri", "Enugu", "Calabar"];
     const vehicles = ["bus", "sienna", "car"];
     const testRides = [];
 
@@ -16,46 +28,49 @@ async function seed() {
       date.setDate(date.getDate() + i);
       const dateString = date.toISOString().split("T")[0];
 
-      cities.forEach((city, index) => {
-        const vType = vehicles[index % vehicles.length];
-        const hour = 7 + index;
-        const formattedHour = hour < 10 ? `0${hour}` : `${hour}`;
+      origins.forEach((origin) => {
+        destinations.forEach((dest, index) => {
+          if (origin === dest) return;
 
-        // Logical seat totals for Nigerian transport
-        const total = vType === "bus" ? 14 : vType === "sienna" ? 7 : 4;
+          const vType = vehicles[index % vehicles.length];
+          const hour = 7 + (index % 10);
+          const total = vType === "bus" ? 14 : vType === "sienna" ? 7 : 4;
 
-        // Generate random occupied seats
-        const occupied = [];
-        const numToOccupy = Math.floor(Math.random() * 4); // 0 to 3 seats taken
-        while (occupied.length < numToOccupy) {
-          let s = Math.floor(Math.random() * total) + 1;
-          if (!occupied.includes(s)) occupied.push(s);
-        }
-
-        testRides.push({
-          origin: "Port Harcourt",
-          destination: city,
-          departureTime: new Date(`${dateString}T${formattedHour}:00:00.000Z`),
-          vehicleType: vType,
-          price: 15000 + index * 2000,
-          totalSeats: total,
-          occupiedSeats: occupied,
-          park: `${city} Luxury Park`,
-          driver: {
-            name: `Captain ${city} Express`,
-            rating: 4.8,
-          },
-          status: "available",
+          testRides.push({
+            origin: origin,
+            destination: dest,
+            departureTime: new Date(
+              `${dateString}T${hour.toString().padStart(2, "0")}:00:00.000Z`,
+            ),
+            vehicleType: vType,
+            price: 15000 + index * 1000,
+            totalSeats: total,
+            occupiedSeats: [],
+            park: `${origin} Main Terminal`,
+            image:
+              "https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?q=80&w=2069",
+            driver: {
+              name: `Captain ${dest}`,
+              rating: 4.8,
+            },
+            // Ensure this status exists in your RIDE schema enum
+            status: "available",
+          });
         });
       });
     }
 
-    await Ride.insertMany(testRides);
-    console.log("✅ Database Seeded Successfully!");
+    // Force Mongoose to use the Ride model specifically
+    await Ride.insertMany(testRides, { validateBeforeSave: true });
+
+    console.log(`✅ Success! Seeded ${testRides.length} rides.`);
     process.exit();
   } catch (err) {
-    console.error(err);
+    console.error("❌ Seeding Error:", err.message);
+    // Log full error if it's not a validation error
+    if (!err.errors) console.error(err);
     process.exit(1);
   }
 }
+
 seed();
