@@ -9,6 +9,7 @@ const {
   bookSeats,
   getMyBookings,
 } = require("../controllers/rideController");
+const { protect } = require("../middlewares/authMiddleware");
 
 // Search Endpoint
 router.get("/search", searchRides);

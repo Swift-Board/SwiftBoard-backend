@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const Ride = require("../models/Ride");
 const Booking = require("../models/Booking");
 
