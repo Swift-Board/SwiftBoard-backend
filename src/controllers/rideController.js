@@ -13,14 +13,13 @@ exports.searchRides = async (req, res) => {
       origin: { $regex: new RegExp(`^${origin.trim()}$`, "i") },
       destination: { $regex: new RegExp(`^${destination.trim()}$`, "i") },
       departureTime: { $gte: startOfDay, $lte: endOfDay },
-      status: "available", // Only show rides that aren't cancelled or completed
+      status: "available",
     };
 
     if (vehicleType && vehicleType !== "all") query.vehicleType = vehicleType;
 
     const rides = await Ride.find(query).sort({ departureTime: 1 });
 
-    // Virtuals like 'availableSeats' will be included in the JSON response
     res.status(200).json({ success: true, results: rides.length, rides });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -28,62 +27,109 @@ exports.searchRides = async (req, res) => {
 };
 
 exports.bookSeats = async (req, res) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
-
   try {
     const { seatNumbers, paymentReference } = req.body;
     const rideId = req.params.id;
-    const userId = req.user.id; // Ensure your auth middleware provides this
+    const userId = req.user.id;
 
-    // 1. Update the Ride (Atomic check to prevent double-booking)
-    const ride = await Ride.findOneAndUpdate(
-      {
-        _id: rideId,
-        status: { $ne: "cancelled" },
-        occupiedSeats: { $nin: seatNumbers },
-      },
-      { $addToSet: { occupiedSeats: { $each: seatNumbers } } },
-      { new: true, session },
-    );
-
-    if (!ride) throw new Error("Seats unavailable or already booked");
-
-    const booking = await Booking.create(
-      [
-        {
-          user: userId,
-          ride: rideId,
-          seatNumbers,
-          paymentReference,
-          amountPaid: ride.price * seatNumbers.length,
-          status: "pending",
-        },
-      ],
-      { session },
-    );
-
-    if (ride.occupiedSeats.length >= ride.totalSeats) {
-      ride.status = "full";
-      await ride.save({ session });
+    // Validation
+    if (
+      !seatNumbers ||
+      !Array.isArray(seatNumbers) ||
+      seatNumbers.length === 0
+    ) {
+      throw new Error("Invalid seat numbers provided");
     }
 
-    await session.commitTransaction();
+    if (!paymentReference) {
+      throw new Error("Payment reference is required");
+    }
 
+    console.log("📝 Booking Request:", {
+      rideId,
+      userId,
+      seatNumbers,
+      paymentReference,
+    });
+
+    // 1. Find the ride
+    const ride = await Ride.findById(rideId);
+
+    if (!ride) {
+      throw new Error("Ride not found");
+    }
+
+    if (ride.status === "cancelled") {
+      throw new Error("This ride has been cancelled");
+    }
+
+    // 2. Check if any requested seats are already occupied
+    const alreadyOccupied = seatNumbers.filter((seat) =>
+      ride.occupiedSeats.includes(seat),
+    );
+
+    if (alreadyOccupied.length > 0) {
+      throw new Error(`Seats already booked: ${alreadyOccupied.join(", ")}`);
+    }
+
+    // 3. Check if there's enough capacity
+    const newOccupiedCount = ride.occupiedSeats.length + seatNumbers.length;
+    if (newOccupiedCount > ride.totalSeats) {
+      throw new Error("Not enough available seats");
+    }
+
+    // 4. Update ride with new occupied seats
+    ride.occupiedSeats.push(...seatNumbers);
+
+    // Update status if ride is now full
+    if (ride.occupiedSeats.length >= ride.totalSeats) {
+      ride.status = "full";
+    }
+
+    await ride.save();
+
+    // 5. Create booking record
+    const booking = await Booking.create({
+      user: userId,
+      ride: rideId,
+      seatNumbers,
+      paymentReference,
+      amountPaid: ride.price * seatNumbers.length,
+      status: "pending",
+    });
+
+    console.log("✅ Booking successful:", {
+      bookingId: booking._id,
+      seats: seatNumbers,
+      totalOccupied: ride.occupiedSeats.length,
+    });
+
+    // 6. Emit socket event
     const io = req.app.get("socketio");
-    if (io) io.to(rideId.toString()).emit("seatsUpdated", ride.occupiedSeats);
+    if (io) {
+      io.to(rideId.toString()).emit("seatsUpdated", ride.occupiedSeats);
+      console.log("📡 Socket event emitted for ride:", rideId);
+    }
 
+    // 7. Send success response
     res.status(200).json({
       success: true,
-      message: "Booking confirmed",
-      ride,
-      booking: booking[0],
+      message: "Booking confirmed successfully",
+      ride: {
+        ...ride.toObject(),
+        availableSeats: ride.totalSeats - ride.occupiedSeats.length,
+      },
+      booking,
     });
   } catch (error) {
-    await session.abortTransaction();
-    res.status(400).json({ success: false, message: error.message });
-  } finally {
-    session.endSession();
+    console.error("❌ Booking error:", error.message);
+
+    const statusCode = error.message.includes("not found") ? 404 : 400;
+
+    res.status(statusCode).json({
+      success: false,
+      message: error.message || "Booking failed. Please try again.",
+    });
   }
 };
 
@@ -114,7 +160,10 @@ exports.getMyBookings = async (req, res) => {
 exports.getRideById = async (req, res) => {
   try {
     const ride = await Ride.findById(req.params.id);
-    if (!ride) return res.status(404).json({ message: "Ride not found" });
+    if (!ride)
+      return res
+        .status(404)
+        .json({ success: false, message: "Ride not found" });
     res.status(200).json({ success: true, ride });
   } catch (error) {
     res.status(400).json({ success: false, message: "Invalid ID format" });
@@ -124,7 +173,6 @@ exports.getRideById = async (req, res) => {
 // 4. POST - ADD NEW RIDE
 exports.createRide = async (req, res) => {
   try {
-    // Ensure occupiedSeats defaults to empty if not provided
     const ride = await Ride.create(req.body);
     res.status(201).json({ success: true, ride });
   } catch (error) {
@@ -139,7 +187,10 @@ exports.updateRide = async (req, res) => {
       new: true,
       runValidators: true,
     });
-    if (!ride) return res.status(404).json({ message: "Ride not found" });
+    if (!ride)
+      return res
+        .status(404)
+        .json({ success: false, message: "Ride not found" });
     res.status(200).json({ success: true, ride });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
@@ -150,7 +201,10 @@ exports.updateRide = async (req, res) => {
 exports.deleteRide = async (req, res) => {
   try {
     const ride = await Ride.findByIdAndDelete(req.params.id);
-    if (!ride) return res.status(404).json({ message: "Ride not found" });
+    if (!ride)
+      return res
+        .status(404)
+        .json({ success: false, message: "Ride not found" });
     res
       .status(200)
       .json({ success: true, message: "Ride deleted successfully" });

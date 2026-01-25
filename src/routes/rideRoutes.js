@@ -14,13 +14,14 @@ const { protect } = require("../middlewares/authMiddleware");
 // Search Endpoint
 router.get("/search", searchRides);
 
-// CRUD Endpoints
+router.get("/my-bookings", protect, getMyBookings);
+
+// Book seats - also before /:id
+router.patch("/:id/book", protect, bookSeats);
+
+// CRUD Endpoints - These must come AFTER specific routes
 router.post("/", createRide);
 
 router.route("/:id").get(getRideById).patch(updateRide).delete(deleteRide);
-
-router.patch("/:id/book", bookSeats);
-
-router.get("/my-bookings", protect, getMyBookings);
 
 module.exports = router;
