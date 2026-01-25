@@ -14,30 +14,34 @@ exports.protect = async (req, res, next) => {
   if (!token) {
     return res.status(401).json({
       success: false,
-      message: "Not authorized to access this route",
+      message: "Authentication required. Please log in.",
     });
   }
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    // Use mongoose.model instead of User.findById
-    const User = mongoose.model("User");
-    req.user = await User.findById(decoded.id);
+    const User = mongoose.models.User || mongoose.model("User");
+    req.user = await User.findById(decoded.id).select("-password");
 
     if (!req.user) {
       return res.status(401).json({
         success: false,
-        message: "User not found",
+        message: "This account no longer exists.",
       });
     }
 
     next();
   } catch (error) {
-    console.log("❌ AUTH ERROR:", error.message);
+    if (error.name === "TokenExpiredError") {
+      console.log("🕒 AUTH ERROR: Token Expired");
+    } else {
+      console.log("❌ AUTH ERROR:", error.message);
+    }
+
     return res.status(401).json({
       success: false,
-      message: "Not authorized to access this route",
+      message: "Session expired or invalid. Please login again.",
     });
   }
 };
