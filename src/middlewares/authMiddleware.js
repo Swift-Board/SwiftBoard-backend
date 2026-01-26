@@ -34,7 +34,7 @@ exports.protect = async (req, res, next) => {
     next();
   } catch (error) {
     if (error.name === "TokenExpiredError") {
-      console.log("🕒 AUTH ERROR: Token Expired");
+      console.log("AUTH ERROR: Token Expired");
     } else {
       console.log("❌ AUTH ERROR:", error.message);
     }
