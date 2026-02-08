@@ -10,7 +10,7 @@ const rideRoutes = require("./routes/rideRoutes");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const MONGODB_URI = process.env.dbURI || process.env.MONGODB_URI;
+const MONGODB_URI = process.env.dbURI
 
 const allowedOrigins = [
   "https://swift-board-lac.vercel.app",
@@ -63,8 +63,7 @@ app.use(
   }),
 );
 
-app.options("*", cors());
-
+app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
