@@ -11,7 +11,7 @@ const rideRoutes = require("./routes/rideRoutes");
 const app = express();
 const PORT = process.env.PORT || 5000;
 const MONGODB_URI = process.env.MONGODB_URI || process.env.dbURI;
-const CLIENT_URL = process.env.CLIENT_URL || "https://swift-board-lac.vercel.app/";
+const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:3000";
 
 // --- SOCKET.IO SETUP ---
 const server = http.createServer(app);
@@ -40,7 +40,7 @@ io.on("connection", (socket) => {
 });
 
 // Middleware
-// app.use(cors({ origin: CLIENT_URL, credentials: true }));
+app.use(cors({ origin: CLIENT_URL, credentials: true }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
