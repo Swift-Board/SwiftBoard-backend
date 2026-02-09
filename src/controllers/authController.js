@@ -59,7 +59,7 @@ exports.register = async (req, res) => {
     });
 
     // Send welcome email
-    await sendEmail(user.email, "registration", user.firstName, user.email);
+    // await sendEmail(user.email, "registration", user.firstName, user.email);
 
     // Generate token
     const token = generateToken(user._id);
